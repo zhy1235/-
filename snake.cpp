@@ -1,9 +1,11 @@
 #include <iostream>
-#include <windows.h>   // 控制台光标、隐藏光标
+#include <fstream>
+#include <windows.h>   // 控制台光标、GetAsyncKeyState、GetModuleFileName
 #include <conio.h>     // _kbhit() / _getch()
 #include <deque>
 #include <cstdlib>
 #include <ctime>
+#include <string>
 
 using namespace std;
 
@@ -34,9 +36,30 @@ void hideCursor() {
     SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
 }
 
-// 清空控制台(可选:用于结束后的刷新)
 void clearScreen() {
     system("cls");
+}
+
+// ---------- 最高分存取 ----------
+// 获取 exe 所在目录(带末尾斜杠),让最高分文件跟 exe 放在一起
+string getExeDir() {
+    char buf[MAX_PATH];
+    GetModuleFileNameA(NULL, buf, MAX_PATH);
+    string path(buf);
+    size_t pos = path.find_last_of("\\/");
+    return path.substr(0, pos + 1);
+}
+
+int loadHighScore(const string& file) {
+    ifstream in(file);
+    int hs = 0;
+    if (in) in >> hs;
+    return hs;
+}
+
+void saveHighScore(const string& file, int hs) {
+    ofstream out(file);
+    if (out) out << hs;
 }
 
 // ---------- 主游戏 ----------
@@ -45,6 +68,10 @@ int main() {
     srand((unsigned)time(NULL));
 
     hideCursor();
+
+    // 最高分文件放在 exe 同目录,跨局持久保存
+    string highScoreFile = getExeDir() + "snake_highscore.txt";
+    int highScore = loadHighScore(highScoreFile);
 
     // 蛇的身体,用 deque 表示,front 是蛇头
     deque<Point> snake;
@@ -64,14 +91,19 @@ int main() {
 
     int score = 0;
     bool gameOver = false;
+    bool paused = false;
 
     // 欢迎界面
     clearScreen();
-    cout << "======================================\n";
-    cout << "          贪吃蛇 (Snake)\n";
-    cout << "======================================\n";
-    cout << "  操作: W/A/S/D 或 方向键 控制移动\n";
-    cout << "  按任意键开始游戏...\n";
+    cout << "========================================\n";
+    cout << "             贪吃蛇 (Snake)\n";
+    cout << "========================================\n";
+    cout << "  移动:  W/A/S/D 或 方向键\n";
+    cout << "  暂停:  空格 或 P\n";
+    cout << "  加速:  按住 Shift(随得分还会自动提速)\n";
+    cout << "  退出:  ESC\n";
+    cout << "  当前最高分: " << highScore << "\n";
+    cout << "  按任意键开始...\n";
     _getch();
 
     clearScreen();
@@ -106,12 +138,25 @@ int main() {
                     case 's': case 'S': nextDir = DOWN;  break;
                     case 'a': case 'A': nextDir = LEFT;  break;
                     case 'd': case 'D': nextDir = RIGHT; break;
+                    case ' ': case 'p': case 'P': paused = !paused; break; // 暂停/继续
                     case 27: gameOver = true; break; // ESC 退出
                 }
             }
         }
+        if (gameOver) break;
 
-        // 禁止反向(不能直接掉头)
+        // ---------- 状态栏(得分 / 最高分 / 长度 / 暂停 / 加速) ----------
+        gotoXY(0, HEIGHT + 3);
+        cout << "                                                            "; // 先清空整行
+        gotoXY(0, HEIGHT + 3);
+        cout << "得分:" << score << "  最高分:" << highScore << "  长度:" << snake.size();
+        if (GetAsyncKeyState(VK_SHIFT) & 0x8000) cout << "  [加速]";
+        if (paused) cout << "  [已暂停,按空格继续]";
+
+        // 暂停时不推进游戏
+        if (paused) { Sleep(50); continue; }
+
+        // ---------- 禁止反向(不能直接掉头) ----------
         if (!(dir == UP    && nextDir == DOWN)  &&
             !(dir == DOWN  && nextDir == UP)    &&
             !(dir == LEFT  && nextDir == RIGHT) &&
@@ -169,31 +214,37 @@ int main() {
         }
 
         // ---------- 绘制 ----------
-        // 绘制食物
+        // 食物
         gotoXY(food.x + 1, food.y + 1);
         cout << "@";
-
-        // 绘制蛇头
+        // 蛇头
         gotoXY(snake.front().x + 1, snake.front().y + 1);
         cout << "O";
-
-        // 绘制蛇身(从第二个格子开始)
+        // 蛇身(从第二个格子开始)
         for (size_t i = 1; i < snake.size(); i++) {
             gotoXY(snake[i].x + 1, snake[i].y + 1);
             cout << "o";
         }
 
-        // 分数显示
-        gotoXY(0, HEIGHT + 3);
-        cout << "得分: " << score << "   长度: " << snake.size() << "   ";
+        // ---------- 速度:随得分自动提升,按住 Shift 再翻倍 ----------
+        int baseDelay = 120 - (score / 10) * 10; // 每吃一个食物快 10ms
+        if (baseDelay < 40) baseDelay = 40;       // 下限
+        int delay = baseDelay;
+        if (GetAsyncKeyState(VK_SHIFT) & 0x8000) delay = baseDelay / 2; // Shift 加速
 
-        // 帧率控制
-        Sleep(100);
+        Sleep(delay);
     }
 
-    // ---------- 游戏结束 ----------
+    // ---------- 游戏结束:更新最高分 ----------
+    bool newRecord = (score > highScore);
+    if (newRecord) {
+        highScore = score;
+        saveHighScore(highScoreFile, highScore);
+    }
+
     gotoXY(0, HEIGHT + 5);
-    cout << "游戏结束! 最终得分: " << score << endl;
+    if (newRecord) cout << "*** 新纪录! ***" << endl;
+    cout << "游戏结束! 最终得分: " << score << "   最高分: " << highScore << endl;
     cout << "按任意键退出..." << endl;
     _getch();
 
