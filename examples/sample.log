@@ -1,0 +1,10 @@
+1760000000000	example	client	1	sent	1	5	0	
+1760000000001	example	client	1	ok	2	0	1000	
+1760000000002	example	client	2	sent	1	5	0	
+1760000000005	example	client	2	ok	2	0	3000	
+1760000000006	example	client	3	sent	1	5	0	
+1760000000106	example	client	3	timeout	2	0	100000	
+1760000000107	example	client	4	sent	1	5	0	
+1760000000108	example	client	4	protocol_error	2	0	1000	
+1760000000109	example	client	5	sent	1	5	0	
+1760000000110	example	client	5	disconnected	2	0	1000	

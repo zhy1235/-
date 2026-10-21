@@ -1,3 +1,10 @@
+/build*/
+/demo-output/
 *.exe
-snake_highscore.txt
-腾讯管理.py
+*.obj
+*.o
+*.a
+*.dll
+*.log
+!examples/sample.log
+__pycache__/

@@ -1,0 +1,34 @@
+name: NetTrace CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            config: Debug
+            sanitize: 'ON'
+          - os: ubuntu-latest
+            config: Release
+            sanitize: 'OFF'
+          - os: windows-latest
+            config: Release
+            sanitize: 'OFF'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DNETTRACE_SANITIZERS=${{ matrix.sanitize }}
+      - name: Build
+        run: cmake --build build --config ${{ matrix.config }} --parallel 2
+      - name: Test
+        run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
